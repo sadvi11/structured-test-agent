@@ -1,0 +1,6 @@
+# The official Anthropic SDK — this is what talks to Claude.
+anthropic>=0.116.0
+
+# Optional convenience: lets you keep your API key in a .env file
+# instead of exporting it in every terminal session.
+python-dotenv>=1.0.0
