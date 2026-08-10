@@ -1,206 +1,66 @@
-# Structured Test-Case Agent
+# Structured Test-Case Generation Agent
 
-Give it a plain-English requirement. Get back structured test cases as JSON.
+> An AI agent that turns a plain-English requirement into professional, structured test cases as strictly-validated JSON - using tool-forced schema output so the format is always valid.
 
-```
-$ python agent.py "test a login form"
-```
+## What It Does
 
-The JSON is **always** valid and **always** the same shape — not because we ask
-nicely and parse carefully, but because the API enforces a schema. More on that
-below.
-
----
-
-## Setup
+Give it a requirement in plain English:
 
 ```bash
-cd ~/structured-test-agent
-
-python3 -m venv .venv
-source .venv/bin/activate
-
-pip install -r requirements.txt
-
-export ANTHROPIC_API_KEY=sk-ant-...
-```
-
-Get a key from https://console.anthropic.com → API Keys.
-
-Prefer not to re-export it every session? Create a `.env` file in this folder:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-Don't commit that file.
-
----
-
-## Usage
-
-```bash
-# Basic
 python agent.py "test a login form"
-
-# Ask for more cases
-python agent.py "test a shopping cart checkout" --count 15
-
-# Save to a file instead of printing
-python agent.py "test a password reset flow" --out cases.json
-
-# No argument? It'll ask you.
-python agent.py
 ```
 
----
+It returns a complete test suite as valid JSON - functional, negative, security, and boundary cases - each with ID, title, type, priority, preconditions, steps, test data, and expected result. From one line of input, it generated cases covering SQL injection, account lockout, email validation, and password masking.
 
-## Example output
+## The Core Technique: Tool-Forced Structured Output
 
-```json
-{
-  "feature": "Login form",
-  "assumptions": [
-    "Assumes email + password authentication, not SSO or magic links"
-  ],
-  "test_cases": [
-    {
-      "id": "TC-001",
-      "title": "Successful login with valid credentials",
-      "type": "functional",
-      "priority": "high",
-      "preconditions": [
-        "A registered, verified account exists for user@example.com"
-      ],
-      "steps": [
-        "Navigate to /login",
-        "Enter 'user@example.com' in the Email field",
-        "Enter 'Correct-Horse-9!' in the Password field",
-        "Click 'Sign in'"
-      ],
-      "test_data": "user@example.com / Correct-Horse-9!",
-      "expected_result": "User is redirected to /dashboard and their name appears in the header"
-    },
-    {
-      "id": "TC-002",
-      "title": "Login rejected with wrong password",
-      "type": "negative",
-      "priority": "high",
-      "preconditions": [
-        "A registered account exists for user@example.com"
-      ],
-      "steps": [
-        "Navigate to /login",
-        "Enter 'user@example.com' in the Email field",
-        "Enter 'wrong-password' in the Password field",
-        "Click 'Sign in'"
-      ],
-      "test_data": "user@example.com / wrong-password",
-      "expected_result": "An error 'Invalid email or password' is shown and the user stays on /login"
-    }
-  ]
-}
+Most people ask an LLM for JSON and hope it comes back clean. This agent forces it:
+
+```mermaid
+flowchart TD
+    A[Plain-English requirement] --> B[Define a tool whose schema IS the answer format]
+    B --> C[Mark schema strict: every property required]
+    C --> D[Force tool_choice to that tool]
+    D --> E[Claude's only move is filling the schema]
+    E --> F[Returns already-validated JSON]
+    style F fill:#2ea44f,stroke:#1a7431,color:#ffffff
+    style D fill:#2088ff,stroke:#0d47a1,color:#ffffff
 ```
 
-Because the shape is guaranteed, downstream code can be blunt:
+Because the model is forced through a strict schema, there is nothing to parse and nothing that can come back malformed.
 
-```python
-from agent import generate_test_cases
+## How It Works
 
-result = generate_test_cases("test a login form")
-
-for case in result["test_cases"]:
-    print(case["id"], case["priority"], case["title"])
+```mermaid
+flowchart LR
+    U[User requirement] --> AG[agent.py]
+    AG --> API[Claude API]
+    API --> TOOL[Strict tool schema, forced]
+    TOOL --> OUT[Validated JSON test cases]
+    style API fill:#D97757,stroke:#a04a30,color:#ffffff
+    style OUT fill:#2ea44f,stroke:#1a7431,color:#ffffff
 ```
 
-No `.get()` defensiveness, no key-existence checks.
+## Quick Start
 
----
-
-## How the "always valid JSON" part works
-
-The naive approach is to write *"reply with JSON and nothing else"* in the
-prompt, then scrape the reply. That mostly works, and then one day the model
-opens with "Certainly! Here's your JSON:" or wraps the object in a ```` ``` ````
-fence, and your parser explodes at 2am.
-
-This agent uses **tool-forced output** instead. Three pieces:
-
-1. **A JSON Schema** (`TEST_CASE_SCHEMA` in `agent.py`) describing precisely
-   what a test-case list looks like — field names, types, allowed enum values.
-
-2. **A tool definition** wrapping that schema, marked `"strict": True`. Strict
-   mode makes the API validate the model's arguments against the schema, and
-   it requires `"additionalProperties": false` plus every property listed in
-   `"required"`.
-
-3. **Forced tool choice**: `tool_choice={"type": "tool", "name": "emit_test_cases"}`.
-   This removes prose as an option. The model's only way to respond is to fill
-   in the tool's arguments.
-
-We never actually *execute* the tool. It's a typed form, not an action — the
-tool's arguments are the answer. Reading it back is one line:
-
-```python
-for block in response.content:
-    if block.type == "tool_use":
-        return block.input   # already a validated Python dict
+```bash
+git clone https://github.com/sadvi11/structured-test-agent.git
+cd structured-test-agent
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY="sk-ant-..."
+python agent.py "test a checkout flow"
 ```
 
-The trade-off worth knowing: strict mode has no optional fields, so every field
-must be present on every test case. Fields that don't apply come back as `""`
-or `[]`. That's why the code can index directly instead of checking.
+## Why This Pattern Matters
 
----
+Reliable structured output separates an AI demo from something you can put in a pipeline. Forcing the model through a strict schema makes the output contract-guaranteed - exactly what production integrations need. The technique generalises: extracting data from documents, generating config, producing API payloads.
 
-## Files
+## Tech Stack
 
-| File               | What it is                                               |
-| ------------------ | -------------------------------------------------------- |
-| `agent.py`         | The whole agent — schema, prompt, API call, CLI          |
-| `requirements.txt` | Two dependencies: `anthropic`, and optional `python-dotenv` |
-| `README.md`        | This file                                                 |
+Python, Anthropic Claude API, tool-forced structured output.
 
----
+## Author
 
-## Customising it
-
-Everything worth changing is near the top of `agent.py`.
-
-**Add a field to every test case** — say, which browser to run it in. Add it to
-the `properties` block *and* to the `required` list of the inner test-case
-object. Strict mode rejects a schema where a property isn't required:
-
-```python
-"browser": {
-    "type": "string",
-    "description": "Browser to run this case in, or empty string for any.",
-},
-```
-
-**Change the categories** — edit the `enum` on the `type` field. The model can
-only choose from that list, so this is a hard constraint, not a suggestion.
-
-**Change the testing style** — edit `SYSTEM_PROMPT`. That's where "senior QA
-engineer", the one-assertion-per-case rule, and the concrete-test-data
-preference live.
-
-**Trade cost against depth** — `EFFORT` controls how much Claude thinks before
-answering (`low` → `max`). `medium` suits a well-specified extraction task like
-this. Raise it to `high` for broader, more imaginative coverage; drop to `low`
-for fast, cheap, obvious cases.
-
-**Swap models** — `MODEL` is set to `claude-opus-5`. `claude-sonnet-5` is faster
-and cheaper; `claude-haiku-4-5` is cheapest. Model IDs are exact strings — no
-date suffixes.
-
----
-
-## Where to take it next
-
-- Emit `pytest` skeletons or Playwright scripts from the JSON.
-- Feed it a real ticket (Jira description, PR body) instead of one sentence.
-- Add a second pass that reviews the generated cases for gaps in coverage.
-- Batch a backlog of requirements through the
-  [Batches API](https://platform.claude.com/docs/en/build-with-claude/batch-processing)
-  at half price.
+Sadhvi Sharma - Cloud & AI Engineer. Ex-Nokia (cloud-native 5G core, 99.9% SLA) -> Cloud & AI.
+Calgary, AB, Canada. [LinkedIn](https://linkedin.com/in/sadhvi-sharma) - [GitHub](https://github.com/sadvi11)
