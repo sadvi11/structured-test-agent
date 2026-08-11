@@ -1,0 +1,30 @@
+name: Tests
+
+# Runs without an API key. The claim this project makes is that the schema
+# guarantees valid output, and the schema is a static artifact — so the
+# invariants that make strict tool use actually strict are asserted directly,
+# and the request-shaping logic is exercised against a mocked client.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Schema invariants and request shape
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest tests/ -q
+      - name: Compile check
+        run: |
+          find . -name '*.py' -not -path './.venv/*' -print0 | xargs -0 -n1 python -m py_compile
+          echo "all Python files compile"
