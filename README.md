@@ -1,5 +1,11 @@
 # Structured Test-Case Generation Agent
 
+[![Tests](https://github.com/sadvi11/structured-test-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/sadvi11/structured-test-agent/actions/workflows/tests.yml)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![Schema](https://img.shields.io/badge/Output-strict%20JSON%20Schema-2088ff)
+![Tool use](https://img.shields.io/badge/Anthropic-forced%20tool%20choice-d97757)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 > An AI agent that turns a plain-English requirement into professional, structured test cases as strictly-validated JSON - using tool-forced schema output so the format is always valid.
 
 ## What It Does
